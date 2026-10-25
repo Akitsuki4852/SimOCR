@@ -1,0 +1,259 @@
+# =============================================================================
+# SimOCR 表格解析配置 —— 「发票 / 装箱单」行业档（可选示例）
+# =============================================================================
+#
+# 这是**可选的行业档**，用来演示如何把某个行业的表格约定写进配置。
+# 通用档（default.yaml）不包含这里的任何规则；本档需要显式选择才会生效。
+#
+# 里面的内容是"某类外贸单据表格"的常见约定：
+#   * 表头用 ART NO. / CTN NO. / SIZE / CNT / DZS / PCS / NW. / GW. / MEAS. 这类简写；
+#   * 数量列写成"打数 + 件数"（12 件 = 1 打）；
+#   * 描述列拆成"货号 + 尺码"，尺码用英寸记号或字母尺码；
+#   * 装箱单版式：一行是一个箱号，尺码与数量是多值列表，行尾是净重/毛重/体积。
+#
+# 这些约定换一个行业就不成立，所以它们是**数据**而不是代码。
+# 如果你要做自己的行业档，复制本文件改词表即可，不需要改任何 C# 代码。
+#
+# 选择方式：设置里的表格配置档，或命令行 --profile=本文件名。
+# =============================================================================
+
+version: 1
+name: invoice-packing
+display: 发票 / 装箱单
+
+# -----------------------------------------------------------------------------
+# 1. 标签 → 字段
+# -----------------------------------------------------------------------------
+fieldGroups:
+  # 装箱单：9~12 列，含箱号/尺码/打数/件数/净重/毛重/体积
+  - name: packing
+    # 标题命中（归一化后出现这两个词）即认为属于本组；"PACKING+LIST" 表示两个词都要出现
+    detect: [PACKINGLIST, PACKING+LIST]
+    labels:
+      ITEM:         [ART NO, ART NO., ARTNO, ITEM, ITEM NO, 货号]
+      DESCRIPTION:  [DESCRIPTION, DESCRIPTION OF GOODS, MARKS, MARKS & NUMBERS, STH, 描述]
+      CARTON:       [CTN NO, CTN NO., CARTON NO, CARTON NO., 箱号]
+      SIZE:         [SIZE, SIZE., 尺码]
+      CARTON_COUNT: [CNT, CTN, CTNS, CARTON, CARTONS, 箱数]
+      DOZENS:       [DZS, DZ, DOZ, DOZENS, 打数]
+      PIECES:       [PCS, PC, PIECES, 件数]
+      NET_WEIGHT:   [NW, NW., N.W., NET WEIGHT, 净重]
+      GROSS_WEIGHT: [GW, GW., G.W., GROSS WEIGHT, 毛重]
+      MEASUREMENT:  [MEAS, MEAS., MEASUREMENT, CBM, 体积]
+      QUANTITY:     [QUANTITY, QTY, 数量]
+      UNIT_PRICE:   [UNIT PRICE, PRICE, 单价]
+      AMOUNT:       [AMOUNT, VALUE, 金额]
+    # 无表头时按列内容补字段
+    infer:
+      - { kind: afterItem,   fields: [CARTON] }
+      - { kind: multi,       fields: [QUANTITY] }
+      - { kind: decimal,     fields: [NET_WEIGHT, GROSS_WEIGHT, MEASUREMENT] }
+      - { kind: integerSlots, fields: [DOZENS, PIECES] }
+
+  # 商业发票：描述 + 数量 + 单价 + 金额
+  - name: invoice
+    detect: [COMMERCIALINVOICE, INVOICE+NO, DESCRIPTION+QUANTITY]
+    labels:
+      ITEM:         [ART NO, ART NO., ARTNO, ITEM, ITEM NO, 货号]
+      DESCRIPTION:  [DESCRIPTION, DESCRIPTION OF GOODS, 描述]
+      SIZE:         [SIZE, SIZE., 尺码]
+      QUANTITY:     [QUANTITY, QTY, QTY., 数量]
+      UNIT_PRICE:   [UNIT PRICE, UNITPRICE, PRICE, U/PRICE, 单价]
+      AMOUNT:       [AMOUNT, TOTAL AMOUNT, VALUE, 金额]
+      CARTON:       [CTN NO, CTN NO., 箱号]
+      CARTON_COUNT: [CNT, CTNS, 箱数]
+      DOZENS:       [DZS, DZ, DOZ, 打数]
+      PIECES:       [PCS, PC, 件数]
+      NET_WEIGHT:   [NW, NW., 净重]
+      GROSS_WEIGHT: [GW, GW., 毛重]
+      MEASUREMENT:  [MEAS, MEAS., CBM, 体积]
+
+fallbackGroup: invoice
+
+# 描述列 → 货号 + 尺码；数量列 → 打数 + 件数
+expand:
+  DESCRIPTION: [ITEM, SIZE]
+  QUANTITY:    [DOZENS, PIECES]
+
+# 列结构塌陷时的语义骨架（短骨架给"一行一个尺码"的装箱单，长骨架给发票）
+skeleton:
+  - [ITEM, SIZE, QUANTITY]
+  - [ITEM, SIZE, DOZENS, PIECES, UNIT_PRICE, AMOUNT]
+
+# -----------------------------------------------------------------------------
+# 2. 字段显示名与角色
+# -----------------------------------------------------------------------------
+fields:
+  ITEM:         { display: 货号, kind: text }
+  DESCRIPTION:  { display: 描述, kind: text }
+  SIZE:         { display: 尺码, kind: text }
+  QUANTITY:     { display: 数量, kind: number }
+  UNIT_PRICE:   { display: 单价, kind: number }
+  AMOUNT:       { display: 金额, kind: number }
+  CARTON:       { display: 箱号, kind: text }
+  CARTON_COUNT: { display: 箱数, kind: number }
+  DOZENS:       { display: 打数, kind: number }
+  PIECES:       { display: 件数, kind: number }
+  NET_WEIGHT:   { display: 净重, kind: number }
+  GROSS_WEIGHT: { display: 毛重, kind: number }
+  MEASUREMENT:  { display: 体积, kind: number }
+
+wholeTextFields: [ITEM, DESCRIPTION, SIZE]
+
+# 装箱单的箱号/箱数是单值列，出现它们时不要做整行数值覆盖
+blockRowLevelOverride: [CARTON, CARTON_COUNT]
+
+# 件数取不到时借左边"打数"那一列的文字：原件里数量是"打数 + 件数"，可能在一个框里也可能分开
+borrowLeft:
+  PIECES: [DOZENS]
+
+# -----------------------------------------------------------------------------
+# 3. 取值规则
+# -----------------------------------------------------------------------------
+patterns:
+  number: '\d[\d,]*(?:\.\d+)?'
+  # 货号：1~4 个字母 + 主体，可带 (编号) 后缀（本行业常见写法）
+  itemCode: '[A-Za-z]{0,4}[\s\-]?[A-Za-z0-9\-]{1,12}(?:\(\d{1,6}\))?'
+  inch: '\d{1,3}(?:\.\d)?\s*["“”″](?:\s*-\s*\d{1,3}(?:\.\d)?\s*["“”″])?'
+  inchMark: '\d{1,3}\s*["“”″]'
+  inchRange: '\d{1,3}\s*["“”″]\s*[-\u2013]\s*\d{1,3}\s*["“”″]'
+  letterSize: '\b(?:XXXL|XXL|XXS|XL|XS|S|M|L|2XL|3XL|4XL|5XL|6XL)\b'
+
+# 含贸易包装单位（这是本档与通用档的关键差别）
+unitWords: [
+  '/DZS', '/PCS', '/CTN', '/SET',
+  'DZS', 'DZ', 'DOZ', 'DOZENS', 'PCS', 'PC', 'PIECES',
+  'CTNS', 'CTN', 'CARTONS', 'CARTON', 'SETS', 'SET',
+  'KGS', 'KGM', 'KG', 'NW', 'GW', 'CBM',
+  'USD', 'CNY', 'RMB', 'EUR', 'JPY', 'HKD',
+]
+
+currencySymbols: '¥￥$€£'
+
+letterSizes: [XXXL, XXL, XXS, XL, XS, S, M, L, 2XL, 3XL, 4XL, 5XL, 6XL]
+
+rules:
+  ITEM:
+    whole:
+      regex: itemCode
+      requireLetterAndDigit: true
+      excludeIfIn: letterSizes
+      preferParenthesised: true
+      minLength: 4
+  SIZE:
+    whole:
+      combine: [inch, letterSize]
+  DOZENS:
+    whole:  { number: first, intsOnly: true }
+    masked: { number: first, intsOnly: true }
+  PIECES:
+    whole:  { number: second, intsOnly: true }
+    # 一件货的"件数"余数不可能达到一打（12 件）—— 这是本行业单位制带来的上限
+    masked: { number: second, intsOnly: true, max: 12 }
+  QUANTITY:
+    whole:  { number: first }
+    masked: { number: first }
+  UNIT_PRICE:
+    whole:  { number: first }
+    masked: { number: first, decimalsOnly: true }
+  AMOUNT:
+    whole:  { number: last }
+    masked: { number: last, decimalsOnly: true }
+  CARTON:
+    whole:  { number: all }
+  CARTON_COUNT:
+    whole:  { number: all }
+  NET_WEIGHT:
+    whole:  { number: all }
+  GROSS_WEIGHT:
+    whole:  { number: all }
+  MEASUREMENT:
+    whole:  { number: all }
+
+roles:
+  item: ITEM
+  size: SIZE
+  cartonCandidates: [CARTON, CARTON_COUNT]
+  integerSlots: [DOZENS, PIECES]
+  price: UNIT_PRICE
+  amount: AMOUNT
+
+# -----------------------------------------------------------------------------
+# 4. 派生列与校验
+# -----------------------------------------------------------------------------
+derived:
+  # 数量(打) = 打数 + 件数 / 12
+  - name: QUANTITY_DOZENS
+    display: 数量(打)
+    kind: number
+    from: [DOZENS, PIECES]
+    formula: dozens_plus_pieces_over
+    perDozen: 12
+
+checks:
+  lineAmount:
+    enabled: true
+    amount: AMOUNT
+    quantity: [QUANTITY, QUANTITY_DOZENS]
+    price: UNIT_PRICE
+    toleranceAbs: 0.02
+    toleranceRatio: 0.005
+    # 按金额反算数量并写回数量列。会改动识别结果，所以默认关闭；打开时每次都留痕。
+    reverseWriteBack: false
+    perDozen: 12
+
+  documentTotal:
+    enabled: true
+    amount: AMOUNT
+    totalKeywords: [TOTAL, 合计, 小计, 总计]
+    toleranceAbs: 0.05
+    toleranceRatio: 0.01
+
+nonValues: ['合计', '小计', '总计', 'total', 'TOTAL', 'n/a', 'na', '-', '—', '–', '/']
+
+# -----------------------------------------------------------------------------
+# 5. 结构判定（本档的核心：不靠标题也能认出装箱单版式）
+# -----------------------------------------------------------------------------
+contentDetection:
+  titleKeywords: [PACKING LIST, PACKINGLIST, COMMERCIAL INVOICE]
+  rules:
+    # 一行里有 ≥2 个"独立"英寸记号（把 22"-32" 这类区间排除），且这种行 ≥3 行
+    - name: listLayout
+      pattern: inchMark
+      minMatchesPerRow: 2
+      minRows: 3
+      excludeRanges: true
+    # 行尾是 [5~40 整数][5~40 整数][小于 1 的小数]（净重/毛重/体积），且这种行 ≥3 行
+    - name: numericTail
+      rowTailPattern: ['int:5-40', 'int:5-40', 'decimal:0-1']
+      minRows: 3
+
+# -----------------------------------------------------------------------------
+# 6. 阈值与开关
+# -----------------------------------------------------------------------------
+thresholds:
+  minHeaderLabels: 2
+  itemColumnRatio: 0.4
+  sizeColumnRatio: 0.3
+  minColumnsForInference: 3
+  numericColumnRatio: 0.6
+  integerColumnRatio: 0.8
+  decimalColumnRatio: 0.6
+  multiValueRatio: 0.5
+  minSemanticFieldsPerRow: 2
+  gapFactor: 0.22
+  minGapPixels: 10
+
+features:
+  multiValueCells: true
+  mergeAdjacentSameLabel: true
+  rowLevelExtraction: true
+  # 本档显式打开：派生列会进入导出结果（这是行业约定的产物，通用档默认不放）
+  derivedColumnsInExport: true
+  # 装箱单的一行会被行聚类拆成上下两半，按内容互补合并（发票不会被合并）
+  mergeComplementaryRows: true
+  # 按箱号把连续行合并成一行
+  groupByKey: true
+  # 合并时组内做"去重后空格拼接"的列：尺码与件数是列表，其余列取首个非空值。
+  # 键列（箱号）由 roles.cartonCandidates 决定，不在这里写。
+  groupByKeyListFields: [SIZE, PIECES]

@@ -1,0 +1,234 @@
+# =============================================================================
+# SimOCR 表格解析配置 —— 通用档（内置默认）
+# =============================================================================
+#
+# 这个文件把"表格解析用到的表格词汇、取值规则、校验规则"从 C# 代码里搬了出来。
+# 代码只保留与业务无关的算法（列切分、行聚类、字段绑定、取值骨架）；
+# 任何只对某个行业成立的约定都必须放进**可选的行业档**，而不是这里。
+#
+# 通用档的设计原则：
+#   * 只声明**普通的表格列名**（Item / Description / Quantity / Unit Price / Amount…）；
+#   * 不做任何单位换算、不生成任何派生列（derived 为空）；
+#   * 不做任何"猜业务含义"的取值（例如"第 2 个整数就是件数"）；
+#   * 校验默认只做**只读报告**，不改写识别结果。
+#
+# 用法：
+#   * 程序启动时加载本文件；文件缺失或字段缺省时用代码内置兜底值；
+#   * 需要行业规则时，改用别的档（设置里选择，或见 example-invoice-packing 档）。
+#
+# 术语：
+#   label —— 识别出的表头文字（先做大写化 + 形近字归一再去匹配）
+#   field —— 语义字段的内部名（ASCII）；界面显示名用 display
+# =============================================================================
+
+version: 1
+name: default
+display: 通用表格
+
+# -----------------------------------------------------------------------------
+# 1. 标签 → 字段
+# -----------------------------------------------------------------------------
+fieldGroups:
+  - name: generic
+    # 通用档不猜版式：永远用这一组
+    detect: []
+    labels:
+      ITEM:         [ITEM, ITEM NO, ITEM NO., ITEMNO, ART NO, ART NO., ARTNO, 货号, 编号]
+      DESCRIPTION:  [DESCRIPTION, DESC, DESCRIPTION OF GOODS, 描述, 品名, 商品描述]
+      SIZE:         [SIZE, SIZE., 尺码, 规格]
+      QUANTITY:     [QUANTITY, QTY, QTY., 数量]
+      UNIT_PRICE:   [UNIT PRICE, UNITPRICE, PRICE, U/PRICE, 单价]
+      AMOUNT:       [AMOUNT, TOTAL AMOUNT, VALUE, 金额, 总额]
+      CARTON:       [CTN NO, CTN NO., CARTON NO, CARTON NO., 箱号]
+      CARTON_COUNT: [CTN, CTNS, CARTON, CARTONS, 箱数]
+      DOZENS:       [DZS, DZ, DOZ, DOZENS, 打数]
+      PIECES:       [PCS, PC, PIECES, 件数]
+      NET_WEIGHT:   [NW, NW., N.W., NET WEIGHT, 净重]
+      GROSS_WEIGHT: [GW, GW., G.W., GROSS WEIGHT, 毛重]
+      MEASUREMENT:  [MEAS, MEAS., MEASUREMENT, CBM, 体积]
+fallbackGroup: generic
+
+# 子列展开：一个物理列其实是两个语义子列时按顺序给出。通用档不做展开。
+expand: {}
+
+# 列结构塌陷时的"语义骨架"。通用档给最保守的一条。
+skeleton:
+  - [ITEM, DESCRIPTION, QUANTITY, UNIT_PRICE, AMOUNT]
+
+# -----------------------------------------------------------------------------
+# 2. 字段显示名
+# -----------------------------------------------------------------------------
+fields:
+  ITEM:         { display: 货号, kind: text }
+  DESCRIPTION:  { display: 描述, kind: text }
+  SIZE:         { display: 尺码, kind: text }
+  QUANTITY:     { display: 数量, kind: number }
+  UNIT_PRICE:   { display: 单价, kind: number }
+  AMOUNT:       { display: 金额, kind: number }
+  CARTON:       { display: 箱号, kind: text }
+  CARTON_COUNT: { display: 箱数, kind: number }
+  DOZENS:       { display: 打数, kind: number }
+  PIECES:       { display: 件数, kind: number }
+  NET_WEIGHT:   { display: 净重, kind: number }
+  GROSS_WEIGHT: { display: 毛重, kind: number }
+  MEASUREMENT:  { display: 体积, kind: number }
+
+# 这些字段取值时用整段原文，而不是"遮蔽掉其它字段后的残文"。
+wholeTextFields: [ITEM, DESCRIPTION, SIZE]
+
+# 出现这些字段时，不做"整行数值覆盖"（多值表格会把数字错误分配）
+blockRowLevelOverride: [CARTON, CARTON_COUNT]
+
+# 字段取不到值时，允许从左边哪些字段借文字再取一次（通用档不借）
+borrowLeft: {}
+
+# -----------------------------------------------------------------------------
+# 3. 取值规则
+# -----------------------------------------------------------------------------
+patterns:
+  # 数字（含千分位与小数）—— 通用，必须有
+  number: '\d[\d,]*(?:\.\d+)?'
+  # 货号类 token：字母 + 数字的短 token
+  itemCode: '[A-Za-z]{1,4}[\s\-]?[A-Za-z0-9\-]{1,16}'
+  # 英寸记号（仅当表格确实用英寸标注尺寸时才有意义）
+  inch: '\d{1,3}(?:\.\d)?\s*["“”″]'
+  # 英寸记号（计数用：不含区间写法，区间由 inchRange 先剔除）
+  inchMark: '\d{1,3}\s*["“”″]'
+  # 英寸区间（用于把 22"-32" 这类区间排除在"独立记号"之外）
+  inchRange: '\d{1,3}\s*["“”″]\s*[-\u2013]\s*\d{1,3}\s*["“”″]'
+  # 字母尺码 token（通用档的 letterSizes 为空，所以它实际不生效）
+  letterSize: '\b(?:XXXL|XXL|XXS|XL|XS|S|M|L)\b'
+
+# 取值前先遮蔽/剥离的单位词。通用档只放度量与货币单位，
+# 不放 DZS/PCS/CTN 这类"某个行业的包装单位"（那些在行业档里）。
+unitWords: ['KGS', 'KGM', 'KG', 'G', 'MG', 'LBS', 'LB', 'OZ', 'CBM', 'ML', 'L',
+            'USD', 'CNY', 'RMB', 'EUR', 'JPY', 'HKD']
+
+currencySymbols: '¥￥$€£'
+
+# 除货币符号外，OCR 还常把符号**误读**成这些字符（例如 `￥` 被认成 `我`/`天`）。
+# 这是引擎相关的噪声清单，不是业务词；不需要时可覆盖，写成空串表示"只要 currencySymbols"。
+currencyNoiseGlyphs: '我天'
+
+# 字母尺码词表：通用档为空（字母尺码是服装行业的约定）
+letterSizes: []
+
+# rules：每个字段怎么从文本里取值。
+#   whole  —— 在整段原文上取值；masked —— 在遮蔽掉其它字段后的残文上取值
+#   number —— first / last / second / all / 数字下标
+# 通用档只声明"这一段文字里明显就是该字段的值"的规则，
+# 不做"第几个数字意味着什么"的业务推断。
+rules:
+  ITEM:
+    whole:  { regex: itemCode, requireLetterAndDigit: true, minLength: 2 }
+  DESCRIPTION:
+    whole:  { number: none }
+  SIZE:
+    whole:  { combine: [inch] }
+  QUANTITY:
+    whole:  { number: first }
+    masked: { number: first }
+  UNIT_PRICE:
+    whole:  { number: first }
+    masked: { number: first, decimalsOnly: true }
+  AMOUNT:
+    whole:  { number: last }
+    masked: { number: last, decimalsOnly: true }
+  CARTON:
+    whole:  { number: all }
+  CARTON_COUNT:
+    whole:  { number: all }
+  DOZENS:
+    whole:  { number: first, intsOnly: true }
+  PIECES:
+    whole:  { number: second, intsOnly: true }
+  NET_WEIGHT:
+    whole:  { number: all }
+  GROSS_WEIGHT:
+    whole:  { number: all }
+  MEASUREMENT:
+    whole:  { number: all }
+
+# 语义角色：算法里"认出某一类列"的地方从这里取字段名。
+# 留空的角色表示"不做这类推断"。
+roles:
+  item: ITEM
+  size: SIZE
+  cartonCandidates: [CARTON, CARTON_COUNT]
+  integerSlots: [QUANTITY]
+  price: UNIT_PRICE
+  amount: AMOUNT
+
+# -----------------------------------------------------------------------------
+# 4. 派生列与校验
+# -----------------------------------------------------------------------------
+# 通用档**不生成任何派生列**：凭空造出一列并写进导出结果，对通用表格是污染。
+derived: []
+
+checks:
+  # 行级校验：金额 ≈ 数量 × 单价。
+  # 这是对"列的含义"的一种猜测，猜错会在普通表格上产生大量噪声，因此**默认关闭**；
+  # 工具仍然支持它，需要时把它打开即可（只读报告，不改数）。
+  lineAmount:
+    enabled: false
+    amount: AMOUNT
+    quantity: [QUANTITY]
+    price: UNIT_PRICE
+    toleranceAbs: 0.02
+    toleranceRatio: 0.005
+    # 关闭时也保留：允许按金额反算并**写回**数量列（默认 false，属于高风险行为）
+    reverseWriteBack: false
+    perDozen: 1
+
+  # 合计行校验：找到含合计关键字的行，用明细求和去对它的金额。只报告、不改数。
+  documentTotal:
+    enabled: true
+    amount: AMOUNT
+    totalKeywords: [TOTAL, 合计, 小计, 总计]
+    toleranceAbs: 0.05
+    toleranceRatio: 0.01
+
+# 空值写法（这些格子在数值列里不算"错误"）
+nonValues: ['合计', '小计', '总计', 'total', 'TOTAL', 'n/a', 'na', '-', '—', '–', '/']
+
+# -----------------------------------------------------------------------------
+# 5. 结构判定
+# -----------------------------------------------------------------------------
+# 只看内容判断"这是什么版式"。通用档刻意留空：
+# 通用工具不该猜行业版式，猜错比不猜更糟。
+contentDetection:
+  titleKeywords: []
+  rules: []
+
+# -----------------------------------------------------------------------------
+# 6. 阈值与开关
+# -----------------------------------------------------------------------------
+thresholds:
+  minHeaderLabels: 2            # 表头行至少命中几个标签
+  itemColumnRatio: 0.4          # 一列"像货号"的占比门槛
+  sizeColumnRatio: 0.3          # 一列"像尺码"的占比门槛
+  minColumnsForInference: 3     # 少于这么多列就不做内容推断
+  numericColumnRatio: 0.6       # 一列里数字占比达到多少算数值列
+  integerColumnRatio: 0.8       # 数值列里整数占比达到多少算整数列
+  decimalColumnRatio: 0.6       # 小数列占比门槛
+  multiValueRatio: 0.5          # 一行多个数字的占比门槛
+  minSemanticFieldsPerRow: 4    # 语义骨架判定：一行至少要能抽出几个字段
+  # 列间隙阈值 = 字高 × gapFactor，且不小于 minGapPixels。
+  # 警告：这个系数**不要**调大。按表格宽度的百分比或过大的系数会把相邻字段粘成一列。
+  gapFactor: 0.22
+  minGapPixels: 10
+
+features:
+  multiValueCells: true         # 一行里一串数字保留为空格分隔的多值
+  mergeAdjacentSameLabel: true  # 相邻同标签的列合并成一个字段
+  rowLevelExtraction: true      # 做行级数值抽取（把一个大框里的数字分配给各字段）
+  derivedColumnsInExport: false # 派生列是否写进导出结果（通用档本来就没有派生列）
+  # 列名用表头原文（横跨多列时第二列起加序号），而不是配置里的字段显示名。
+  # 为什么通用档要打开：通用档不猜业务含义，而"表头一格横跨两个物理列"时旧行为会把父名重复
+  # （出现 `描述|描述`）—— 实测那两列的数据并不同（左=货号、右=尺码），重名既无区分度也是错的。
+  headerNamesForMultiColumn: true
+  mergeComplementaryRows: false # 是否合并"内容互补"的相邻行（多值版式才需要）
+  groupByKey: false             # 是否按键列把连续行合并成一行（多值版式才需要）
+  # 按键分组合并时，组内做"去重后空格拼接"的列（其余列取首个非空值）。
+  # 键列由 roles.cartonCandidates 决定；通用档不开按键分组，因此这里为空。
+  groupByKeyListFields: []

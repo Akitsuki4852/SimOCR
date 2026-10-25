@@ -1,0 +1,123 @@
+<Window x:Class="SimOCR.Overlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:ClassModifier="internal"
+        Title="SimOCR"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        AllowsTransparency="False"
+        Background="#FF101010"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        Cursor="Cross"
+        Focusable="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <!-- 工具条样式集中在 Styles/ToolbarResources.xaml（与识别结果窗口共用，保证"同款样式"） -->
+
+    <!-- 这个根 Canvas 与下面工具条的 Pin/Copy/Cancel 三个按钮过去各挂一个 `x:Name`，
+         但 C# 侧**从未引用**（实测命中 0；三个按钮走的是 Click="OnXxxClick" 处理器）——
+         只写不读的名字会让"这个元素被谁改过"变得不可查，故删名。
+         元素本身、样式、可见性与点击行为一字未动。 -->
+    <Canvas ClipToBounds="True" Background="Transparent">
+
+        <!-- 冻结帧：物理像素 1:1（尺寸在代码里按 DPI 换算成 DIP） -->
+        <Image x:Name="FrameImage"
+               Canvas.Left="0"
+               Canvas.Top="0"
+               Stretch="Fill"
+               RenderOptions.BitmapScalingMode="NearestNeighbor"
+               RenderOptions.EdgeMode="Aliased" />
+
+        <!-- 遮罩：整屏减去选区（EvenOdd），随选区实时更新 -->
+        <Path x:Name="MaskPath" Fill="#66000000" IsHitTestVisible="False" />
+
+        <!--
+            窗口吸附：悬停高亮（光标下的候选窗口）+ 吸附导轨。
+            都画在遮罩**之上**，否则会被 #66000000 压暗。全部 IsHitTestVisible=False，
+            不参与命中测试（鼠标事件仍由 RootCanvas/窗口统一处理）。
+        -->
+        <Rectangle x:Name="HoverOutline"
+                   Stroke="#FF00A0FF" StrokeThickness="2"
+                   Visibility="Collapsed" IsHitTestVisible="False" />
+        <Rectangle x:Name="SnapTargetOutline"
+                   Stroke="#6600A0FF" StrokeThickness="1"
+                   Visibility="Collapsed" IsHitTestVisible="False" />
+        <Canvas x:Name="SnapGuideLayer" IsHitTestVisible="False" />
+
+        <!-- 选区描边：黑底 + 白线，浅色/深色背景都看得清 -->
+        <Rectangle x:Name="SelectionOutlineBlack"
+                   Stroke="#B0000000" StrokeThickness="3"
+                   Visibility="Collapsed" IsHitTestVisible="False" />
+        <Rectangle x:Name="SelectionOutlineWhite"
+                   Stroke="#FFFFFFFF" StrokeThickness="1"
+                   Visibility="Collapsed" IsHitTestVisible="False" />
+
+        <!-- 8 个控制点 -->
+        <Canvas x:Name="HandlesLayer" IsHitTestVisible="False" />
+
+        <!-- 尺寸标签 -->
+        <Border x:Name="SizeLabel"
+                Background="#E61E1E1E" BorderBrush="#66FFFFFF" BorderThickness="1"
+                CornerRadius="3" Padding="6,2" Visibility="Collapsed" IsHitTestVisible="False">
+            <TextBlock x:Name="SizeLabelText" Foreground="#FFF5F5F5" FontSize="12" />
+        </Border>
+
+        <!-- 放大镜 -->
+        <Border x:Name="MagnifierPanel"
+                Background="#F01B1B1B" BorderBrush="#80FFFFFF" BorderThickness="1"
+                CornerRadius="4" Padding="4" Visibility="Collapsed" IsHitTestVisible="False">
+            <StackPanel>
+                <Border BorderBrush="#59FFFFFF" BorderThickness="1">
+                    <Grid>
+                        <Image x:Name="MagnifierImage"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor"
+                               RenderOptions.EdgeMode="Aliased" />
+                        <Canvas x:Name="MagnifierGridLayer" />
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="MagnifierCoordsText" Foreground="#FFE8E8E8" FontSize="11"
+                           FontFamily="Consolas" Margin="0,4,0,0" />
+                <TextBlock x:Name="MagnifierColorText" Foreground="#FFE8E8E8" FontSize="11"
+                           FontFamily="Consolas" />
+            </StackPanel>
+        </Border>
+
+        <!--
+            右下角工具条：导出组（TXT / DOCX / PDF / XLSX）│ 取消 / 置顶 / 保存 / 复制
+            导出组四个按钮各是独立元素、等距，位于"关闭当前选区"❌ 的**左侧**。
+            点击 = 对当前选区执行 OCR → 打开识别结果窗口 → 导出对应格式。
+        -->
+        <Border x:Name="ToolbarPanel" Style="{StaticResource ToolbarPanelStyle}" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="OcrTxtButton" Style="{StaticResource ToolTextButtonStyle}"
+                        Content="TXT" ToolTip="识别并导出纯文本" Click="OnOcrTxtClick" />
+                <Button x:Name="OcrDocxButton" Style="{StaticResource ToolTextButtonStyle}"
+                        Content="DOCX" ToolTip="识别并导出 Word 文档" Click="OnOcrDocxClick" />
+                <Button x:Name="OcrPdfButton" Style="{StaticResource ToolTextButtonStyle}"
+                        Content="PDF" ToolTip="识别并导出 PDF（图片 + 隐形文本层）" Click="OnOcrPdfClick" />
+                <Button x:Name="OcrXlsxButton" Style="{StaticResource ToolTextButtonStyle}"
+                        Content="XLSX" ToolTip="识别并导出 Excel（简单表格）" Click="OnOcrXlsxClick" />
+                <Border Style="{StaticResource ToolbarSeparatorStyle}" />
+                <Button Style="{StaticResource ToolButtonStyle}"
+                        Content="&#xE718;" ToolTip="置顶 (Ctrl+T)" Click="OnPinClick" />
+                <Button Style="{StaticResource ToolButtonStyle}"
+                        Content="&#xE8C8;" ToolTip="复制 (Ctrl+C)" Click="OnCopyClick" />
+                <Button x:Name="SaveButton" Style="{StaticResource ToolButtonStyle}"
+                        Content="&#xE74E;" ToolTip="保存 (Enter)" Click="OnSaveClick" />
+                <Button Style="{StaticResource ToolButtonStyle}"
+                        Content="&#xE711;" ToolTip="取消 (Esc)" Click="OnCancelClick" />
+            </StackPanel>
+        </Border>
+
+        <!-- 未开始框选时的操作提示 -->
+        <Border x:Name="HintPanel"
+                Background="#B31B1B1B" BorderBrush="#4DFFFFFF" BorderThickness="1"
+                CornerRadius="4" Padding="10,6" IsHitTestVisible="False">
+            <TextBlock x:Name="HintText" Foreground="#FFF0F0F0" FontSize="13" />
+        </Border>
+    </Canvas>
+</Window>

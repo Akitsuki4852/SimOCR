@@ -1,0 +1,30 @@
+<Project>
+
+  <PropertyGroup>
+    <Version>0.10.10</Version>
+    <Product>SimOCR</Product>
+    <Company>SimOCR</Company>
+    <Copyright>Copyright (c) 2026 SimOCR</Copyright>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <!--
+      注意：本项目同时启用 WPF 与 WinForms（托盘图标），两者的隐式 using 会互相冲突
+      （Application / Point / Rectangle / MouseEventArgs 等），因此关闭隐式 using，
+      改由 src/SimOCR/GlobalUsings.cs 精确控制。
+    -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NeutralLanguage>zh-Hans</NeutralLanguage>
+
+    <!--
+      静态分析：只把 CA2213/CA2000/CA1823 三条钉成 error（逐条点名，不整体放开 AnalysisMode，
+      否则 CA1303/CA1305 等本地化噪声会淹没真正的缺陷）。
+      注意：规则集必须用 $(MSBuildThisFileDirectory) 的绝对路径 —— 写成相对路径会 MSB3884 而静默失效。
+    -->
+    <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)build\analysis.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+
+</Project>

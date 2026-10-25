@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支只保留最新一次运行：旧的那次没有价值，还会白占 runner 配额。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Windows PowerShell 5.1 把**没有 BOM** 的 UTF-8 脚本按 ANSI（活动代码页）解码，
+      # 含中文的 *.ps1 会整份解析失败（不是乱码那么轻）；build\gate-check.ps1 自己也会因此
+      # 在跑到它的编码前置自检之前就死掉。这条步骤把该不变量钉在 CI 里，防止再被编辑器静默抹掉。
+      #
+      # 注意：这段 run 脚本必须保持 **纯 ASCII**。它本身就是一个 `shell: powershell` 脚本，
+      # CI 会把它写成无 BOM 的临时文件再交给 5.1 —— 这里写中文会重演本步骤要防的那个故障。
+      - name: PowerShell script encoding guard (UTF-8 BOM)
+        shell: powershell
+        run: |
+          $bad = @()
+          foreach ($f in @(Get-ChildItem -Path build -Filter *.ps1 -File | Sort-Object Name)) {
+            $bytes = [System.IO.File]::ReadAllBytes($f.FullName)
+            $nonAscii = 0
+            foreach ($b in $bytes) { if ($b -gt 127) { $nonAscii++ } }
+            if ($nonAscii -eq 0) { continue }
+            $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+            if (-not $hasBom) { $bad += ("{0} ({1} non-ASCII bytes)" -f $f.Name, $nonAscii) }
+          }
+          if ($bad.Count -gt 0) {
+            Write-Host "[FAIL] missing UTF-8 BOM; Windows PowerShell 5.1 will parse these as ANSI:"
+            foreach ($item in $bad) { Write-Host ("  - " + $item) }
+            Write-Host "Fix: re-save the file with UTF8Encoding(`$true) / 'UTF-8 with BOM'."
+            exit 1
+          }
+          Write-Host "[OK] every non-ASCII *.ps1 under build/ carries a UTF-8 BOM"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # 依赖不变就不重新下载 NuGet 包（RapidOcrNet 及其传递依赖约 60 MB，含 SkiaSharp 各平台原生库）。
+      # 键里带上 csproj / global.json / Directory.Build.props：包版本或 SDK 要求一变就换新缓存。
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Build (Release)
+        run: dotnet build SimOCR.slnx -c Release
+
+      - name: Pure-logic assertions (console runner, no testhost)
+        run: .\tests\SimOCR.Tests\bin\Release\net10.0-windows\SimOCR.Tests.exe --case=all
+
+      - name: xUnit tests
+        # ScreenCaptureTests 需要交互桌面（真实抓屏），CI 里跳过；其余用例照常执行。
+        # TRX 供下一步上传：失败时能直接看到"哪条用例、哪一行断言"。
+        run: >
+          dotnet test tests\SimOCR.Tests\SimOCR.Tests.csproj
+          -c Release --no-build
+          --filter "FullyQualifiedName!~ScreenCaptureTests"
+          --logger "trx;LogFileName=simocr-tests.trx"
+          --results-directory tests\TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: test-results
+          path: tests/TestResults/*.trx
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # 调试用构建产物（**不是**发布包：发布包由 build\publish.ps1 在本机出，见 README_DEV §3）。
+      - name: Upload build output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: simocr-release-build
+          path: |
+            src/SimOCR/bin/Release/net10.0-windows/SimOCR.exe
+            src/SimOCR/bin/Release/net10.0-windows/SimOCR.dll
+          if-no-files-found: error
+          retention-days: 7

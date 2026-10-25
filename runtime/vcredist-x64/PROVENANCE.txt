@@ -1,0 +1,11 @@
+Visual C++ v14 runtime DLLs staged for app-local deployment (SimOCR).
+Source: C:\WINDOWS\System32 (Microsoft Visual C++ v14 Redistributable, x64)
+Staged: 2026-10-06 21:43:02
+Reason: onnxruntime.dll (ONNX Runtime, used by RapidOcrNet) imports these;
+        a clean Windows without the redistributable cannot load it, so OCR would fail.
+License: Microsoft Visual C++ Redistributable terms - app-local redistribution with the application.
+
+vcruntime140.dll  v14.51.36247.0  178616 bytes  SHA256=D1F4225DF2CD877DBF130D5668A021DCE3F94118455FF5EC952061C30AFC9CE7
+vcruntime140_1.dll  v14.51.36247.0  50112 bytes  SHA256=A7146C08F89FE5B04541AB507CDB59FF7B44534D4BA3C668A426C6450A03434E
+msvcp140.dll  v14.51.36247.0  643512 bytes  SHA256=7C26614E1D733892C2DEAC7E245CE115504B1D80592DD0A01B08E3E5A55F89CA
+msvcp140_1.dll  v14.51.36247.0  35768 bytes  SHA256=206C931BF90FDAD8816DE3B5E2EF80B2BCAA9406C89ECC05FE6FDDFFE251E982

@@ -1,0 +1,64 @@
+SimOCR
+Copyright 2026 SimOCR contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+1. RapidOcrNet 4.2.0
+   Use: pure-C# OCR inference wrapper around ONNX Runtime (detection, text
+        recognition, angle classification).
+   License: Apache License 2.0
+   Source: https://github.com/BobLd/RapidOcrNet
+
+2. ONNX Runtime
+   Use: cross-platform inference engine that executes the OCR models.
+   License: MIT License
+   Source: https://github.com/microsoft/onnxruntime
+
+3. PaddleOCR PP-OCRv5 / PP-OCRv4 text detection, recognition and
+   classification models (ch_PP-OCRv5_det_mobile, ch_PP-OCRv5_rec_mobile,
+   ch_ppocr_mobile_v2.0_cls) plus the ppocrv5 dictionary
+   Use: the bundled Chinese OCR models under models/v5 (≈21 MB).
+   License: Apache License 2.0
+   Source: https://github.com/PaddlePaddle/PaddleOCR
+   Redistributed via: RapidAI/RapidOCR v3.9.2 (https://github.com/RapidAI/RapidOCR)
+   The bundled copies are byte-identical to the upstream release; all four
+   SHA256 hashes (det / rec / cls / dict) are pinned and verified in
+   build/fetch-models.ps1.
+
+4. Microsoft Visual C++ v14 redistributable runtime DLLs
+   (vcruntime140.dll, vcruntime140_1.dll, msvcp140.dll, msvcp140_1.dll)
+   Use: app-local runtime required by onnxruntime.dll on machines that do not
+        have the Visual C++ Redistributable installed.
+   License: Microsoft Software License Terms for the Microsoft Visual C++
+            Redistributable (redistributable components).
+   See runtime/vcredist-x64/PROVENANCE.txt for provenance and hashes.
+
+5. YamlDotNet 18.1.0
+   Use: parsing the table-profile YAML files under Profiles/.
+   License: MIT License
+   Source: https://github.com/aaubry/YamlDotNet
+
+6. SkiaSharp 3.119.1
+   Use: image handling required by RapidOcrNet.
+   License: MIT License
+   Source: https://github.com/mono/SkiaSharp
+
+7. Clipper2 2.0.0
+   Use: polygon clipping, a transitive dependency of RapidOcrNet.
+   License: Boost Software License 1.0 (BSL-1.0)
+   Source: https://github.com/AngusJohnson/Clipper2
+
+8. Other transitive Microsoft packages (System.Numerics.Tensors and similar
+   .NET runtime components)
+   License: MIT License
+
+--------------------------------------------------------------------------------
+Trademarks
+--------------------------------------------------------------------------------
+
+Windows, Visual Studio and Visual C++ are trademarks of Microsoft Corporation.
+All other trademarks are the property of their respective owners.

@@ -1,0 +1,3 @@
+Item	Qty	Price
+Widget A	12	3.50
+Gear C	4	18.00

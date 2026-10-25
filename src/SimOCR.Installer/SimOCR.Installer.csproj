@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    SimOCR-Setup：自解压安装器（"傻瓜式"分发形态）。
+
+    设计要点：
+      * NativeAOT + WinExe：不依赖 .NET 运行时、双击即用、无控制台窗口；
+        体积只有 1~2 MB（对比自包含单文件要 70 MB）。
+        代价：AOT 不支持 WPF/WinForms，所以本工程不能引用任何 UI 框架，
+        进度条用系统原生的 IProgressDialog（COM，见 ProgressSink.cs），
+        失败时自动降级为"静默解压"。
+      * 便携 zip 作为嵌入资源打包进 exe（见 payload\ 目录 + build\publish.ps1）。
+        为什么用嵌入资源而不是"把 zip 追加在 exe 末尾"：
+        追加会让 zip 在文件里的起始偏移非 0，而 ZipArchive 需要的是
+        一个"从 0 开始的可寻址流"，用资源流可以天然满足，省掉一层 SubStream。
+      * 卸载器是同一个工程不带 payload 的构建结果，作为第二个嵌入资源
+        （LogicalName=SimOCR.uninstaller.exe）在安装时释放到安装目录。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>SimOCR-Setup</AssemblyName>
+    <RootNamespace>SimOCR.Installer</RootNamespace>
+    <ApplicationIcon>..\SimOCR\Assets\SimOCR.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- NativeAOT -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <StripSymbols>true</StripSymbols>
+    <OptimizationPreference>Size</OptimizationPreference>
+    <!-- IProgressDialog / 快捷方式要用的 COM 互操作（AOT 下必须显式打开） -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <UseWindowsForms>false</UseWindowsForms>
+    <UseWPF>false</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      便携 zip（SimOCR 本体）。用 -p:IncludePayload=false 构建"卸载器"版本时不嵌入。
+      LogicalName 固定，运行时代码按常量取流。
+    -->
+    <EmbeddedResource Include="payload\SimOCR-portable.zip"
+                      LogicalName="SimOCR.payload.zip"
+                      Condition="'$(IncludePayload)' != 'false' And Exists('payload\SimOCR-portable.zip')" />
+    <EmbeddedResource Include="payload\SimOCR-Uninstall.exe"
+                      LogicalName="SimOCR.uninstaller.exe"
+                      Condition="'$(IncludeUninstaller)' != 'false' And Exists('payload\SimOCR-Uninstall.exe')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      这里过去有一条 <InternalsVisibleTo Include="SimOCR.Tests" />，但 tests/ 下**没有任何文件**
+      引用 SimOCR.Installer 的命名空间（全仓 0 处）—— 那是一张空头支票：它白白把安装器的
+      internal 成员暴露给测试程序集，却没有任何消费方。0.10.5 已删除。
+      若将来测试真的要覆盖安装器内部逻辑，再加回来，并同时补上真正的消费点。
+    -->
+  </ItemGroup>
+
+</Project>

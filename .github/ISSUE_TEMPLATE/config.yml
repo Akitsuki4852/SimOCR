@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用说明与常见问题
+    url: https://github.com/Akitsuki4852/SimOCR/blob/master/README.md
+    about: 安装、快捷键、卸载、识别效果等问题先看这里
+  - name: 安全问题（私密报告）
+    url: https://github.com/Akitsuki4852/SimOCR/security/advisories/new
+    about: 请勿在公开 issue 中报告安全漏洞

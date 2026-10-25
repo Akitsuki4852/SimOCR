@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- 与被测项目（WPF + WinForms 混用）保持一致：隐式 using 会冲突，故关闭 -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <!--
+      这个程序集**同时**是两种东西 ——
+        * xUnit 测试程序集：`dotnet test` 用 vstest 加载它跑 [Fact]/[Theory]（PureLogicTests.cs）；
+        * 普通控制台程序：Program.cs 的 Main 是不依赖 testhost 的纯逻辑运行器
+          （受限环境里 testhost 可能因 SetParentProcessExitCallback/OpenProcess 被拒而启动失败，
+           所以门禁需要一条不经过 testhost 的执行路径）。
+      Microsoft.NET.Test.Sdk 默认会生成一个 Main（GenerateProgramFile=true）来占住入口点；
+      这里关掉它，换成我们自己的 Main。vstest 从不调用测试程序集的入口点，
+      所以 `dotnet test` 的发现/执行行为不变（测试程序集本来就是 OutputType=Exe）。
+    -->
+    <GenerateProgramFile>false</GenerateProgramFile>
+    <!--
+      SDK 对 IsTestProject 的默认是不生成 apphost（UseAppHost=false），只出 SimOCR.Tests.dll，
+      于是"控制台运行器"只能靠 `dotnet SimOCR.Tests.dll` 启动。这里显式要回 apphost，
+      让门禁能像跑 SimOCR.exe 一样直接跑 tests\SimOCR.Tests\bin\<配置>\net10.0-windows\SimOCR.Tests.exe
+      （两条路都不经过 testhost；多一个 apphost 对 `dotnet test` 没有任何影响）。
+    -->
+    <UseAppHost>true</UseAppHost>
+  </PropertyGroup>
+
+  <!--
+    PureLogic/ 下是纯逻辑断言的**唯一一份**源码：只编进本测试程序集，应用侧不链接任何
+    PureLogic 文件（发布产物 SimOCR.dll 里没有这些类型）。xUnit 与控制台运行器都调用
+    PureLogicChecks.Run，不存在"xUnit 一份、运行器一份"的复制。
+    需要真窗口/真鼠标的探针仍留在应用的 Diagnostics/（那部分本来就不属于纯逻辑断言）。
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SimOCR\SimOCR.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      「配置档单一来源」这条纯逻辑断言要读**程序目录下**的 Profiles/*.yaml
+      （TableProfile.ProfileDirectory() = AppContext.BaseDirectory/Profiles，与生产同一条加载路径）。
+      被测项目是用自定义 Target（CopyTableProfilesToOutput）往**它自己的**输出目录拷的，
+      ProjectReference 不会把那种拷贝带过来 —— 所以测试侧显式再拷一份，
+      否则断言在控制台运行器/xUnit 里会以"用例不成立"（缺 YAML）结束，等于没测。
+    -->
+    <Content Include="..\..\src\SimOCR\Export\Profiles\*.yaml"
+             Link="Profiles\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
