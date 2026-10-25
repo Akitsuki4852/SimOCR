@@ -37,7 +37,7 @@
     需要真窗口/真鼠标的探针仍留在应用的 Diagnostics/（那部分本来就不属于纯逻辑断言）。
   -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
