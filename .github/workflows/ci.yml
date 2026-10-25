@@ -54,7 +54,7 @@ jobs:
       # 依赖不变就不重新下载 NuGet 包（RapidOcrNet 及其传递依赖约 60 MB，含 SkiaSharp 各平台原生库）。
       # 键里带上 csproj / global.json / Directory.Build.props：包版本或 SDK 要求一变就换新缓存。
       - name: Cache NuGet packages
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json', 'Directory.Build.props') }}
