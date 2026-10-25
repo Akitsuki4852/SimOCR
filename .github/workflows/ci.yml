@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Windows PowerShell 5.1 把**没有 BOM** 的 UTF-8 脚本按 ANSI（活动代码页）解码，
       # 含中文的 *.ps1 会整份解析失败（不是乱码那么轻）；build\gate-check.ps1 自己也会因此
