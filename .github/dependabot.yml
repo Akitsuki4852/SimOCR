@@ -1,0 +1,26 @@
+version: 2
+
+updates:
+  # NuGet：RapidOcrNet / YamlDotNet 及其传递依赖（ONNX Runtime、SkiaSharp、Clipper2）。
+  # 这些包影响识别结果与原生库，只提 PR、不自动合并；升级后需跑 build/gate-check.ps1 与真实单据验收。
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - dependencies
+
+  # GitHub Actions：只升 actions/*，避免 CI 因 action 过时而静默降级。
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies
+      - ci

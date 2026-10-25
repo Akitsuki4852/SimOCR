@@ -1,0 +1,47 @@
+# 构建产物（可重新生成）
+bin/
+obj/
+/dist/
+# dotnet test 的 TRX / 覆盖率输出（CI 会上传，本地不该进版本库）
+TestResults/
+
+# 运行时数据（便携模式下会写在 exe 同目录）
+logs/
+config.json
+config.corrupt.*.json
+
+# 安装器打包用的中间产物：便携 zip + 卸载器 exe（每次发布由 build/publish.ps1 重新生成）
+src/SimOCR.Installer/payload/
+
+# 本机/IDE
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.DotSettings.user
+
+# 某些工具/CI 的通用产物目录
+artifacts/
+
+# 开发过程的临时产物
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 提交信息草稿等临时文件（不要提交）
+_commit_msg*.txt
+_cmsg*.tmp
+
+# ---------------------------------------------------------------------------
+# 注意：**不要把 models/ 加进忽略**。
+#
+# `models/v5/` 下的 PP-OCRv5 中文模型（det/rec/cls + 字典，共约 21 MB）**随仓库提交**，
+# 目的是让 clone 之后不需要联网就能构建与运行（离线优先）。
+# 发布产物里也会带上它们（见 src/SimOCR/SimOCR.csproj 的 CopyOcrModelsBuild/Publish）。
+#
+# 若确需重建或校验模型：build/fetch-models.ps1（带 SHA256 校验）。
+#
+# `runtime/vcredist-x64/*.dll`（app-local VC++ 运行库）同理，必须随仓库提交。
+# ---------------------------------------------------------------------------

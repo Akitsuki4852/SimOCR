@@ -1,0 +1,13 @@
+<Application x:Class="SimOCR.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- 工具条样式：覆盖层与识别结果窗口共用（"同款样式"） -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/ToolbarResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

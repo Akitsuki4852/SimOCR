@@ -1,0 +1,190 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>SimOCR</RootNamespace>
+    <AssemblyName>SimOCR</AssemblyName>
+    <ApplicationIcon>Assets\SimOCR.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- 托盘用 WinForms NotifyIcon（零额外依赖，行为稳定），因此同时启用 WinForms -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <!--
+      WFO0003：WinForms 建议把高 DPI 配置交给 ApplicationHighDpiMode。
+      本程序是 WPF 主导，DPI 感知必须在 app.manifest 里声明 PerMonitorV2（WPF 才认），
+      因此有意识地屏蔽这条建议。
+    -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      V1 OCR 引擎：RapidOcrNet（Apache-2.0，纯 C# + ONNX Runtime；PP-OCRv5 中文模型随包）。
+      引擎与参数选型依据：同一批样本上"行数召回 + 文本一致率"的实测对比，
+      结论写在 RecognitionService / AppSettings 的注释里。
+    -->
+    <PackageReference Include="RapidOcrNet" Version="4.2.0" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      中文 OCR 模型（det/rec/cls + 字典，约 21MB）**随仓库提交**在 models/v5，clone 后无需联网即可构建。
+      需要重新下载或校验时用 build/fetch-models.ps1（逐个 SHA256 校验）。
+      输出目录用 models/v5-cn，避免与 RapidOcrNet 包自带的 latin 模型（models/v5）混在一起。
+    -->
+    <OcrModelFiles Include="$(MSBuildProjectDirectory)\..\..\models\v5\det.onnx" />
+    <OcrModelFiles Include="$(MSBuildProjectDirectory)\..\..\models\v5\rec.onnx" />
+    <OcrModelFiles Include="$(MSBuildProjectDirectory)\..\..\models\v5\cls.onnx" />
+    <OcrModelFiles Include="$(MSBuildProjectDirectory)\..\..\models\v5\dict.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 托盘图标在运行时从资源流读取 -->
+    <Resource Include="Assets\SimOCR.ico" />
+  </ItemGroup>
+
+  <!--
+    Apache-2.0 §4(a)/(d)：分发二进制时必须让接收者拿到许可证副本与 NOTICE 归属声明。
+    两条路径都要覆盖，缺一条就有一半用户拿不到：
+      * None + CopyToOutputDirectory/CopyToPublishDirectory → 便携 zip、安装器装出来的目录里
+        有 LICENSE / NOTICE 实体文件（占分发量的大头）；
+      * EmbeddedResource → 单文件 exe 旁边没有别的文件（publish.ps1 只保留那一个 exe），
+        所以设置页「开源许可」从程序集里读同一份文本显示出来（§4(d) 明确允许"在程序生成的显示中"给出）。
+    两份来源是仓库根目录的同一个文件，不另存副本，避免声明与 LICENSE 走样。
+  -->
+  <ItemGroup>
+    <None Include="$(MSBuildProjectDirectory)\..\..\LICENSE"
+          Link="LICENSE"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(MSBuildProjectDirectory)\..\..\NOTICE"
+          Link="NOTICE"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildProjectDirectory)\..\..\LICENSE" LogicalName="SimOCR.LICENSE.txt" />
+    <EmbeddedResource Include="$(MSBuildProjectDirectory)\..\..\NOTICE" LogicalName="SimOCR.NOTICE.txt" />
+  </ItemGroup>
+
+  <!--
+    表格解析配置档（YAML）。必须在**构建与发布**两种产物里都落到 <输出>/Profiles/：
+    运行时代码按 AppContext.BaseDirectory/Profiles 去找，找不到就只能退回内置兜底
+    （不含任何字段词表），表面能跑但语义层全失效 —— 所以这里显式拷贝并在
+    build/publish.ps1 里加了发布闸门。
+  -->
+  <ItemGroup>
+    <TableProfileFile Include="Export\Profiles\*.yaml" />
+  </ItemGroup>
+
+  <Target Name="CopyTableProfilesToOutput" AfterTargets="Build">
+    <Copy SourceFiles="@(TableProfileFile)"
+          DestinationFolder="$(TargetDir)Profiles\"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyTableProfilesToPublish" AfterTargets="Publish">
+    <Copy SourceFiles="@(TableProfileFile)"
+          DestinationFolder="$(PublishDir)Profiles\"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    内存策略（写进 runtimeconfig.json）：
+    这是一个"托盘常驻 + 偶尔截图"的进程，内存比吞吐重要。
+      * Server=false      ：工作站 GC（默认，但显式写死避免被环境变量改变）
+      * ConserveMemory=7  ：GC 更积极地在大对象堆（冻结帧）回收后把内存还给系统
+      * DynamicAdaptationMode=1：.NET 8+ 的自适应堆数量，按实际负载收缩（托盘空闲时最省）
+      * RetainVM=false    ：不保留已释放的堆段
+  -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.Server" Value="false" />
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+    <RuntimeHostConfigurationOption Include="System.GC.DynamicAdaptationMode" Value="1" />
+    <RuntimeHostConfigurationOption Include="System.GC.RetainVM" Value="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 单元测试需要访问 internal 类型（SelectionModel / SettingsService 等） -->
+    <InternalsVisibleTo Include="SimOCR.Tests" />
+  </ItemGroup>
+
+  <!--
+    本工程**不链接 tests/ 下的任何源码**：纯逻辑断言只编进 SimOCR.Tests 程序集
+    （见 tests/SimOCR.Tests/SimOCR.Tests.csproj），发布产物 SimOCR.dll 里没有这些类型。
+    需要真桌面 / 真鼠标 / 真窗口的探针仍在本工程的 Diagnostics/
+    （SelfTest.cs / SelfTestSnap*.cs / TableAcceptance.cs / InputSimulator.cs / SnapHostWindow.cs），
+    对应用户可用的自检入口 &#45;&#45;selftest-snap / &#45;&#45;snap-probe-occlusion / &#45;&#45;accept-snap。
+    生产会用的差异工具 TableTsvDiff 在 Export/TableTsvDiff.cs（它是工具，不是断言）。
+  -->
+
+  <!--
+    模型落地：拷到 <输出>/models/v5-cn，并删掉 RapidOcrNet 包自带的 latin 模型（models/v5，约 10MB）——
+    我们总是显式传入中文模型路径，那份 latin 集只会白占分发体积。
+    缺模型时只告警不中断（UI 会禁用导出按钮并提示），发布脚本 publish.ps1 会先确保模型存在。
+  -->
+  <ItemGroup>
+    <!--
+      VC++ v14 运行时（app-local）：onnxruntime.dll 的导入表需要 VCRUNTIME140(_1) / MSVCP140(_1)，
+      这些**不是 Windows 自带**（只有装了 "Microsoft Visual C++ v14 Redistributable" 才有），
+      干净机器上缺失会导致 ONNX 加载失败、OCR 不可用。
+      DLL 由 build/fetch-vcredist.ps1 从构建机 System32 取出（签名校验 + PROVENANCE），已随仓库提交。
+    -->
+    <VcRuntimeFiles Include="$(MSBuildProjectDirectory)\..\..\runtime\vcredist-x64\*.dll" />
+  </ItemGroup>
+
+  <Target Name="CheckVcRuntimePresent" BeforeTargets="Build">
+    <Warning Condition="'@(VcRuntimeFiles)' == ''" Text="缺少 VC++ 运行时 DLL：onnxruntime.dll 在干净机器上会加载失败。请运行 build/fetch-vcredist.ps1" />
+  </Target>
+
+  <Target Name="CopyVcRuntimeBuild" AfterTargets="Build" Condition="'@(VcRuntimeFiles)' != ''">
+    <Copy SourceFiles="@(VcRuntimeFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyVcRuntimePublish" AfterTargets="Publish" Condition="'@(VcRuntimeFiles)' != ''">
+    <Copy SourceFiles="@(VcRuntimeFiles)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="EnsureOcrModelsPresent" BeforeTargets="Build">
+    <Warning Condition="!Exists('$(MSBuildProjectDirectory)\..\..\models\v5\det.onnx')" Text="缺少中文 OCR 模型：请先运行 build/fetch-models.ps1（下载到 models/v5）" />
+  </Target>
+
+  <Target Name="CopyOcrModelsBuild" AfterTargets="Build" Condition="Exists('$(MSBuildProjectDirectory)\..\..\models\v5\det.onnx')">
+    <Copy SourceFiles="@(OcrModelFiles)" DestinationFolder="$(TargetDir)models\v5-cn\" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyOcrModelsPublish" AfterTargets="Publish" Condition="Exists('$(MSBuildProjectDirectory)\..\..\models\v5\det.onnx')">
+    <Copy SourceFiles="@(OcrModelFiles)" DestinationFolder="$(PublishDir)models\v5-cn\" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    从源头阻止 RapidOcrNet 包把自带的 latin 模型拷进输出：包的 targets 用 @(Models) 做源，
+    在它自己的拷贝目标之前把这个 item 清空即可（比"拷完再删"可靠 —— 实测 AfterTargets 清理
+    在 publish 路径上不生效，导致 13MB 无用 latin 模型进了分发包）。
+    我们总是显式传入中文模型路径（models/v5-cn），那份 latin 集不会被用到。
+  -->
+  <Target Name="SkipBundledLatinModels" BeforeTargets="CopyModelsBuild;CopyModelsPublish">
+    <ItemGroup>
+      <Models Remove="@(Models)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- 兜底：万一还有残留（例如以前构建留下的），发布/构建后删掉 models\v5 -->
+  <Target Name="DropBundledLatinModels" AfterTargets="CopyModelsBuild;CopyModelsPublish">
+    <ItemGroup>
+      <BundledLatinModels Include="$(TargetDir)models\v5\*.*" />
+      <BundledLatinModelsPublish Include="$(PublishDir)models\v5\*.*" />
+    </ItemGroup>
+    <Delete Files="@(BundledLatinModels);@(BundledLatinModelsPublish)" ContinueOnError="true" />
+    <RemoveDir Directories="$(TargetDir)models\v5;$(PublishDir)models\v5" ContinueOnError="true" />
+    <Warning Condition="Exists('$(PublishDir)models\v5')" Text="发布目录里仍有 models\v5（latin 模型），分发包会多出约 13MB" />
+  </Target>
+
+</Project>

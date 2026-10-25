@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SimOCR 静态分析规则集。
+
+  这里**只钉这三条**，不整体放开 AnalysisMode：
+    * CA2213  可释放字段应被释放（Disposable fields should be disposed）
+    * CA2000  在失去作用域前释放对象（Dispose objects before losing scope）
+    * CA1823  避免未使用的私有字段（Avoid unused private fields）
+
+  为什么不用 WarningsAsErrors 全开：会把 CA1303 / CA1305 等上千条本地化噪声一起变成错误，
+  掩盖真正的缺陷。
+
+  使用方式：Directory.Build.props 用绝对路径引用本文件
+  （$(MSBuildThisFileDirectory)build\analysis.ruleset）；写成相对路径会 MSB3884。
+-->
+<RuleSet Name="SimOCR Analysis" Description="只把 CA2213 / CA2000 / CA1823 提升为错误" ToolsVersion="15.0">
+  <Rules AnalyzerId="Microsoft.CodeAnalysis.NetAnalyzers" RuleNamespace="Microsoft.CodeAnalysis.NetAnalyzers">
+    <Rule Id="CA2213" Action="Error" />
+    <Rule Id="CA2000" Action="Error" />
+    <Rule Id="CA1823" Action="Error" />
+  </Rules>
+</RuleSet>

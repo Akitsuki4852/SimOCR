@@ -1,0 +1,28 @@
+# SimOCR 编辑器约定
+# 这些规则只影响编辑器与格式化工具，不参与构建；构建期的静态分析规则见 build/analysis.ruleset。
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{cs,xaml}]
+indent_size = 4
+
+# builds 脚本必须带 BOM，否则 Windows PowerShell 5.1 会把中文按 ANSI 读、整份脚本解析失败。
+# 注意：BOM 是文件内容的一部分，.editorconfig 只能声明"要 UTF-8"，补不了 BOM ——
+# 新建/改写 build/*.ps1 后请确认文件头仍是 EF BB BF（build/gate-check.ps1 有前置自检会拦）。
+[*.ps1]
+charset = utf-8-bom
+indent_size = 4
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

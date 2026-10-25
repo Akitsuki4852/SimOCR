@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SimOCR/SimOCR.csproj" />
+    <Project Path="src/SimOCR.Installer/SimOCR.Installer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SimOCR.Tests/SimOCR.Tests.csproj" />
+  </Folder>
+</Solution>

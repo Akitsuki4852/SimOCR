@@ -1,0 +1,33 @@
+# 交给 Git 按内容自动判定文本/二进制（不做强制换行转换，
+# 以免把仓库里既有的 CRLF 文件整文件改写成 LF 产生无意义的 diff）
+* text=auto
+
+# 明确标记二进制：不做换行转换，也不尝试 diff
+*.onnx  binary
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.zip   binary
+*.exe   binary
+*.dll   binary
+*.docx  binary
+*.xlsx  binary
+*.pdf   binary
+
+# 让 GitHub 语言统计正确识别本仓库主体
+*.cs    linguist-language=C#
+*.xaml  linguist-language=C#
+
+# ---------------------------------------------------------------------------
+# PowerShell 脚本的编码约定
+#
+# Windows PowerShell 5.1 把**没有 BOM** 的脚本按本地 ANSI 代码页读取。脚本里一旦有中文，
+# 就会被读成乱码并直接**解析失败**（不是显示乱码那么轻 —— 是整份脚本跑不起来）。
+# 所以 build/*.ps1 里含中文的脚本必须保存为 **UTF-8 with BOM**。
+#
+# 注意：BOM 是文件内容的一部分，Git **不会**在 checkout 时替你补上；换编辑器/批量改写后
+# 务必确认 BOM 还在。build/gate-check.ps1 有一道前置自检专门拦这个。
+# ---------------------------------------------------------------------------
+*.ps1   text eol=crlf
+*.psm1  text eol=crlf
